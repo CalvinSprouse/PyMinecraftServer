@@ -114,7 +114,7 @@ class ServerLoader:
         """
         try:
             return self.server_process.is_alive()
-        except AttributeError:
+        except ValueError:
             return False
 
     def get_process(self):
@@ -222,6 +222,9 @@ class ServerMaker:
         """
         return os.listdir(os.path.basename(self.server_location))
 
+    def get_server_location(self):
+        return self.server_location
+
     def __enter__(self):
         return self
 
@@ -254,8 +257,10 @@ if __name__ == "__main__":
     # needed for windows
     freeze_support()
 
+    ServerMaker("training", overwrite=True).make_server()
     with ServerLoader("training", 10) as loader:
         loader.start_server()
         while loader.is_running():
             print("AGONY")
             time.sleep(1)
+        print("RELEASE")
