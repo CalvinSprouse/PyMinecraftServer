@@ -2,6 +2,7 @@
 Next step: make server runner
 """
 from bs4 import BeautifulSoup
+from multiprocessing import Process, freeze_support
 import math
 import os
 import psutil
@@ -10,6 +11,7 @@ import requests
 import shutil
 import socket
 import subprocess
+import time
 import wget
 
 
@@ -53,6 +55,7 @@ class ServerLoader:
             self.mem_allocation = min(mem_allocation, self.get_max_mem_allocation())
 
         # automatically preform a server properties load
+        self.server_process = None
         self.properties = {}
         if _auto_load:
             self.load_server()
@@ -69,36 +72,53 @@ class ServerLoader:
         """
         More of my best friend ***dict comprehension*** here to write some lines with style and output to a file (song).
         """
-        new_lines = [f"{key.split('=')[0]}={self.properties[key.split('=')[0]]}\n" if "=" in key else key
-                     for key in open(os.path.join(self.server_location, "server.properties"), "r").readlines()]
-        open(os.path.join(self.server_location, "server.properties"), "w").writelines(new_lines)
+        if not self.is_running():
+            new_lines = [f"{key.split('=')[0]}={self.properties[key.split('=')[0]]}\n" if "=" in key else key
+                         for key in open(os.path.join(self.server_location, "server.properties"), "r").readlines()]
+            open(os.path.join(self.server_location, "server.properties"), "w").writelines(new_lines)
 
     def migrate_version(self, new_version: str):
         """
         Will download and replace the old .jar, may break the server.
         :param new_version: new version
         """
-        try:
-            old_version = self.get_current_version()
-            ServerMaker.download_jar(self.server_location, f"minecraft_server.{new_version}.jar", new_version)
-            os.remove(os.path.join(self.server_location, f"minecraft_server.{old_version}.jar"))
-        except IndexError:
-            ServerMaker.download_jar(self.server_location, f"minecraft_server.{new_version}.jar", new_version)
+        if not self.is_running():
+            try:
+                old_version = self.get_current_version()
+                ServerMaker.download_jar(self.server_location, f"minecraft_server.{new_version}.jar", new_version)
+                os.remove(os.path.join(self.server_location, f"minecraft_server.{old_version}.jar"))
+            except IndexError:
+                ServerMaker.download_jar(self.server_location, f"minecraft_server.{new_version}.jar", new_version)
 
     def start_server(self):
-        # start the server
-        return self
+        self.server_process = Process(target=self.run_server)
+        self.server_process.start()
+        return self.server_process
+
+    def run_server(self):
+        with cd(self.server_location):
+            os.system(f"java -Xms{int(self.mem_allocation)}G -Xmx{int(self.mem_allocation)}G -jar minecraft_server.{self.get_current_version()}.jar")
+        self.stop_server()
 
     def stop_server(self):
-        # stop the server - should be robust enough to be called twice without error
-        pass
+        try:
+            self.server_process.close()
+        except ValueError:
+            pass
+        self.save_server()
 
     def is_running(self):
         """
         Is the server currently running (cause multithreading maybe)
         :return: True or False
         """
-        pass
+        try:
+            return self.server_process.is_alive()
+        except AttributeError:
+            return False
+
+    def get_process(self):
+        return self.server_process
 
     def change_property(self, property_name: str, val):
         """
@@ -106,14 +126,16 @@ class ServerLoader:
         :param property_name: key
         :param val: val
         """
-        self.properties[property_name] = val
+        if not self.is_running():
+            self.properties[property_name] = val
 
     def set_properties(self, new_properties):
         """
         Overwrite the whole properties dict with one of your own, if you're into that
         :param new_properties: the dict to replace the old one.
         """
-        self.properties = new_properties
+        if not self.is_running():
+            self.properties = new_properties
 
     def set_mem_allocation(self, mem_allocation: float, _override=False):
         """
@@ -122,10 +144,11 @@ class ServerLoader:
         :param _override: Do you know what you are doing?
         :return new RAM so you can see if it was overridden
         """
-        self.mem_allocation = mem_allocation
-        if not _override:
-            self.mem_allocation = min(self.mem_allocation, self.get_max_mem_allocation())
-        return self.get_mem_allocation()
+        if not self.is_running():
+            self.mem_allocation = mem_allocation
+            if not _override:
+                self.mem_allocation = min(self.mem_allocation, self.get_max_mem_allocation())
+            return self.get_mem_allocation()
 
     def get_properties(self):
         return self.properties
@@ -152,8 +175,7 @@ class ServerLoader:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.stop_server()
-        self.save_server()
+        pass
 
     def __repr__(self):
         return f"Server: {self.server_name} running version {self.get_current_version()} with {self.get_mem_allocation()}GB of RAM"
@@ -229,6 +251,11 @@ class ServerMaker:
 
 
 if __name__ == "__main__":
-    with ServerLoader("training", 100) as loader:
-        loader.migrate_version("1.16")
+    # needed for windows
+    freeze_support()
 
+    with ServerLoader("training", 10) as loader:
+        loader.start_server()
+        while loader.is_running():
+            print("AGONY")
+            time.sleep(1)
