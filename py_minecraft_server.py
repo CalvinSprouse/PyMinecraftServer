@@ -194,6 +194,12 @@ class ServerMaker:
             open("eula.txt", "w").writelines(eula_lines)
         return self
 
+    def get_number_of_servers(self):
+        """
+        :return: The number of servers adjacent to the current server
+        """
+        return os.listdir(os.path.basename(self.server_location))
+
     def __enter__(self):
         return self
 
