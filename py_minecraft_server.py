@@ -1,32 +1,37 @@
 """
-CONCEPT:
-The class should be defined with:
-server_dir = the location where servers will be stored
-server_name = name of the server to load/create
-Might make two classes a ServerMaker ServerLoader for simplicity
-
-ServerMaker defined with:
-server_dir = the location where servers will be stored
-server_name = name of the server to create
-server_jar_location = by default is none and will download one, if provided then that specifies the version
-
-on init server maker will preform INITIAL creation by accepting the EULA but will hold off on final creation until
-properties are configured, I envision the object to be loaded into one of those with statements neither open nor close
-will probably do anything but it would make it clean
-with ServerMaker(server_dir, server_name, server_version) as maker:
-    maker.properties["key"] = val (maybe input validation tied to a hard coded dictionary)
-
-Each server created gets it's folder (as usual) with no modifications except that it will include it's own .jar
-The loading device must be able to read the properties file
-
-Next step: make server maker
+Next step: make server runner
 """
+from bs4 import BeautifulSoup
 import math
 import os
 import psutil
 import re
 import requests
+import shutil
 import socket
+import subprocess
+import wget
+
+
+class cd:
+    def __init__(self, new_path):
+        self.new_path = os.path.expanduser(new_path)
+
+    def __enter__(self):
+        self.saved_path = os.getcwd()
+        os.chdir(self.new_path)
+
+    def __exit__(self, etype, value, traceback):
+        os.chdir(self.saved_path)
+
+
+class VersionException(Exception):
+    def __init__(self, entered_version=None):
+        self.entered_version = entered_version
+        super().__init__()
+
+    def get_user_input(self):
+        return self.entered_version
 
 
 class ServerLoader:
@@ -67,6 +72,18 @@ class ServerLoader:
         new_lines = [f"{key.split('=')[0]}={self.properties[key.split('=')[0]]}\n" if "=" in key else key
                      for key in open(os.path.join(self.server_location, "server.properties"), "r").readlines()]
         open(os.path.join(self.server_location, "server.properties"), "w").writelines(new_lines)
+
+    def migrate_version(self, new_version: str):
+        """
+        Will download and replace the old .jar, may break the server.
+        :param new_version: new version
+        """
+        try:
+            old_version = self.get_current_version()
+            ServerMaker.download_jar(self.server_location, f"minecraft_server.{new_version}.jar", new_version)
+            os.remove(os.path.join(self.server_location, f"minecraft_server.{old_version}.jar"))
+        except IndexError:
+            ServerMaker.download_jar(self.server_location, f"minecraft_server.{new_version}.jar", new_version)
 
     def start_server(self):
         # start the server
@@ -127,7 +144,7 @@ class ServerLoader:
         Analyzes the .jar file found in os.listdir() THERE BETTER ONLY BE ONE DON'T GO ADDING A SECOND
         :return: current version str
         """
-        return re.search(r"minecraft_server.(?P<version>(\d*.)*).jar",
+        return re.search(r"minecraft_server.(?P<version>(.\d*)*).jar",
                          [jar for jar in os.listdir(self.server_location) if ".jar" in jar][0],
                          re.IGNORECASE).group("version")
 
@@ -156,10 +173,56 @@ class ServerLoader:
         return int((psutil.virtual_memory().available / math.pow(10, 9)) * 0.75)
 
 
+class ServerMaker:
+    def __init__(self, server_location: str, jar_version=None, overwrite=False):
+        # define location and create it if it doesn't exist
+        self.server_location = os.path.abspath(server_location)
+        if overwrite and os.path.exists(self.server_location):
+            shutil.rmtree(self.server_location)
+        if not os.path.exists(server_location):
+            os.makedirs(self.server_location, exist_ok=True)
+            self.jar_version = jar_version
+            if not jar_version:
+                self.jar_version = self.get_current_minecraft_version()
+            self.jar_name = f"minecraft_server.{self.jar_version}.jar"
+
+    def make_server(self):
+        self.download_jar(self.server_location, self.jar_name, self.jar_version)
+        with cd(self.server_location):
+            subprocess.run(f"java -Xms1G -Xmx1G -jar {self.jar_name}")
+            eula_lines = open("eula.txt", "r").readlines()[:2] + ["eula=true\n"]
+            open("eula.txt", "w").writelines(eula_lines)
+        return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+    @staticmethod
+    def download_jar(jar_save_location: str, jar_save_name: str, jar_version: str):
+        """
+        Goes to the depth of the web to expose my computer to virus'.
+        """
+        try:
+            download_link = [link for link in
+                             BeautifulSoup(requests.get(f"https://mcversions.net/download/{jar_version}").content,
+                                           "html.parser").find_all("a", href=True)
+                             if "server" in link["href"] and "mojang" in link["href"]][0]
+            wget.download(download_link["href"], os.path.join(jar_save_location, jar_save_name))
+        except IndexError:
+            raise VersionException(jar_version)
+
+    @staticmethod
+    def get_current_minecraft_version():
+        return re.search(r"minecraft_server.(?P<version>(.\d*)*).jar",
+                         BeautifulSoup(requests.get(r"https://www.minecraft.net/en-us/download/server").content,
+                                       "html.parser").find("div", {"class": "minecraft-version"}).
+                         find("a").text, re.IGNORECASE).group("version")
+
+
 if __name__ == "__main__":
     with ServerLoader("training", 100) as loader:
-        print(loader.get_current_version())
-        print(loader.get_local_ip())
-        print(loader.get_external_ip())
-        print(loader.server_name)
-        loader.save_server()
+        loader.migrate_version("1.16")
+
