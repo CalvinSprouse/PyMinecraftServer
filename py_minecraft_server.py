@@ -19,7 +19,7 @@ with ServerMaker(server_dir, server_name, server_version) as maker:
 Each server created gets it's folder (as usual) with no modifications except that it will include it's own .jar
 The loading device must be able to read the properties file
 
-First step: make server loader/changer
+Next step: make server maker
 """
 import math
 import os
@@ -30,18 +30,16 @@ import socket
 
 
 class ServerLoader:
-    def __init__(self, server_dir: str, server_name: str, mem_allocation: float, _override=False, _auto_load=True):
+    def __init__(self, server_location: str, mem_allocation: float, _override=False, _auto_load=True):
         """
         Create a server loading device which will load the server isn't that great.
-        :param server_dir: the location where the server(s) are stored
-        :param server_name: the name of the server (should be a subdir of server_dir)
+        :param server_location: the location of the server
         :param mem_allocation: the amount of memory in GB to allocate towards running the server
         :param _override: if you want to run the server with more than 75% of available RAM
         """
         # ensure the server exists
-        self.server_dir = server_dir
-        self.server_name = server_name
-        self.server_location = os.path.abspath(os.path.join(server_dir, server_name))
+        self.server_location = os.path.abspath(server_location)
+        self.server_name = os.path.basename(self.server_location)
         assert os.path.exists(self.server_location)
 
         # sets the memory allocation to no more than 3/4 the available ram UNLESS the user passes _override=True
@@ -83,6 +81,7 @@ class ServerLoader:
         Is the server currently running (cause multithreading maybe)
         :return: True or False
         """
+        pass
 
     def change_property(self, property_name: str, val):
         """
@@ -99,9 +98,6 @@ class ServerLoader:
         """
         self.properties = new_properties
 
-    def get_properties(self):
-        return self.properties
-
     def set_mem_allocation(self, mem_allocation: float, _override=False):
         """
         Sets the RAM in GB with a max value of 0.75 available RAM. Pass _override=True to get around this
@@ -114,8 +110,17 @@ class ServerLoader:
             self.mem_allocation = min(self.mem_allocation, self.get_max_mem_allocation())
         return self.get_mem_allocation()
 
+    def get_properties(self):
+        return self.properties
+
     def get_mem_allocation(self):
         return self.mem_allocation
+
+    def get_server_name(self):
+        return self.server_name
+
+    def get_server_location(self):
+        return self.server_location
 
     def get_current_version(self):
         """
@@ -152,8 +157,9 @@ class ServerLoader:
 
 
 if __name__ == "__main__":
-    with ServerLoader("", "training", 100) as loader:
+    with ServerLoader("training", 100) as loader:
         print(loader.get_current_version())
         print(loader.get_local_ip())
         print(loader.get_external_ip())
+        print(loader.server_name)
         loader.save_server()
