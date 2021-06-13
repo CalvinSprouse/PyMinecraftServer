@@ -9,6 +9,8 @@ import math
 import os
 import psutil
 import re
+import requests
+import socket
 import shutil
 import subprocess
 import sys
@@ -47,22 +49,11 @@ class ServerDoesNotExistException(Exception):
 class VersionException(Exception):
     pass
 
+class NoServerLoadedException(Exception):
+    pass
+
 
 # classes
-class ContextManager:
-    def __init__(self, new_path):
-        self.new_path = os.path.expanduser(new_path)
-
-    def __enter__(self):
-        self.saved_path = os.getcwd()
-        os.chdir(self.new_path)
-        logger.debug(f"Entering {self.new_path} from {self.saved_path}")
-
-    def __exit__(self, etype, value, traceback):
-        os.chdir(self.saved_path)
-        logger.debug(f"Exiting {self.new_path} to {self.saved_path}")
-
-
 class ServerMaker:
     def __init__(self, save_location: str, max_servers: int = 5):
         """
@@ -107,11 +98,10 @@ class ServerMaker:
             await self.download_jar(
                 os.path.join(self.server_location, server_name, get_jar_name(server_version)),
                 server_version)
-            with ContextManager(server_save_location):
-                subprocess.run(f"java -Xms1G -Xmx1G -jar {get_jar_name(server_version)}",
-                               stdout=subprocess.DEVNULL)
-                eula_lines = open("eula.txt", "r").readlines()[:2] + ["eula=true\n"]
-                open("eula.txt", "w").writelines(eula_lines)
+            subprocess.run(f"java -Xms1G -Xmx1G -jar {get_jar_name(server_version)}",
+                           stdout=subprocess.DEVNULL, cwd=server_save_location)
+            eula_lines = open(os.path.join(server_save_location, "eula.txt"), "r").readlines()[:2] + ["eula=true\n"]
+            open(os.path.join(server_save_location, "eula.txt"), "w").writelines(eula_lines)
             logger.debug(f"Eula accepted for server {server_name}")
         else:
             raise ExceedMaxServerCountException()
@@ -161,85 +151,153 @@ class ServerMaker:
 
 
 class ServerLoader:
-    def __init__(self, save_location: str, server_name: str):
+    def __init__(self, save_location: str):
         """
         A server loader loads a specific server from a save location and edits/runs it.
         :param save_location: The directory servers are saved to.
         """
         self.save_location = os.path.abspath(save_location)
-        self.server_location = os.path.join(self.save_location, server_name)
         assert os.path.exists(self.save_location)
 
         self.server = None
         self.properties = None
         self.mem_allocation = None
         self.server_process = None
+        self.server_location = None
 
-        self.set_server(server_name)
+        logger.debug(f"Created ServerLoader targeting {self.save_location}")
 
-    def set_server(self, server_name: str):
+    async def load_server(self, server_name: str):
+        """Set which server to look for from the server save location."""
         self.server = server_name
         self.server_location = os.path.join(self.save_location, server_name)
         if not os.path.exists(self.server_location):
             raise ServerDoesNotExistException()
         await self.load_properties()
+        return self
 
     async def load_properties(self):
+        """Load the properties into self.properties dict from server.properties"""
+        if not self.load_server:
+            raise NoServerLoadedException()
         properties_contents = await self.get_properties_file_lines()
         self.properties = {line.strip().split("=")[0]: line.strip().split("=")[1] for line in properties_contents
                            if not line.startswith("#")}
 
     async def save_server(self):
+        """Overwrite the server.properties file to updated properties"""
+        if not self.load_server:
+            raise NoServerLoadedException()
         properties_contents = await self.get_properties_file_lines()
         async with aiofiles.open(os.path.join(self.server_location, "server.properties"), "w") as properties_file:
             await properties_file.writelines(
                 [f"{key.split('=')[0]}={self.properties[key.split('=')[0]]}\n" if "=" in key else key for key in
                  properties_contents])
+        logger.debug("Server changes saved")
 
     async def get_properties_file_lines(self) -> []:
+        """Returns the file lines of the server.properties file"""
+        if not self.load_server:
+            raise NoServerLoadedException()
         async with aiofiles.open(os.path.join(self.server_location, "server.properties"), "r") as properties_file:
             properties_contents = await properties_file.readlines()
         return properties_contents
 
-    def start_server(self, mem_allocation: int):
+    def start_server(self, mem_allocation: int, stdout=None):
+        """Starts the server as a separate process saved to self.server_process"""
+        if not self.load_server:
+            raise NoServerLoadedException()
+        logger.debug(f"Attempting to start server {self.server} with RAM {mem_allocation}")
         self.set_mem_allocation(mem_allocation)
-        self.server_process = Process(target=self.run_server)
+        self.server_process = Process(target=self.run_server, args=(mem_allocation, stdout))
         self.server_process.start()
-        return self.server_process
+        logger.debug(f"Server {self.server} started with RAM {mem_allocation} on {self.get_ip()}")
 
-    def run_server(self):
-        with ContextManager(self.server_location):
-            os.system(f"java -Xms{self.mem_allocation}G -Xmx{self.mem_allocation} -jar {get_jar_name(self.get_current_version())}")
+    def run_server(self, mem_allocation: int, stdout=None):
+        """Runs the server, could be called instead of start server to run the server in a blocking style"""
+        if not self.load_server:
+            raise NoServerLoadedException()
+        self.set_mem_allocation(mem_allocation)
+        if not stdout:
+            stdout = subprocess.DEVNULL
+        subprocess.run(
+            f"java -Xms{self.mem_allocation}G -Xmx{self.mem_allocation}G -jar {get_jar_name(self.get_current_version())}",
+            cwd=self.server_location, stdout=stdout)
+        logger.debug(f"Server {self.server} running {self.is_running()} on {self.get_ip()}")
 
     def stop_server(self):
+        """If the server is running, stop it"""
         if self.is_running():
             self.server_process.close()
+            logger.debug(f"Server {self.server} stopped")
 
     def is_running(self):
+        """Check if the self.server_process Process is alive"""
         if self.server_process:
             return self.server_process.is_alive()
         return False
 
     def get_process(self):
+        """Returns a reference to self.server_process"""
         return self.server_process
 
     def set_mem_allocation(self, mem_allocation: int):
+        """Sets the mem_allocation and ensures it's no more than 50% available RAM"""
         if not self.is_running():
             self.mem_allocation = min(mem_allocation, self.get_max_mem_allocation())
 
+    async def set_property(self, property_name: str, property_val: str):
+        """Change a property of self.properties"""
+        if not self.is_running():
+            self.properties[property_name] = property_val
+            await self.save_server()
+            logger.debug(f"Server property {property_name} changed to {property_val}")
+
+    def get_property(self, property_name: str):
+        """Return a property from self.properties"""
+        return self.properties[property_name]
+
     def get_current_version(self):
+        """Reads the current version from the server jar"""
+        if not self.load_server:
+            raise NoServerLoadedException()
         return re.search(r"minecraft_server.(?P<version>(.\d*)*).jar",
                          [jar for jar in os.listdir(self.server_location) if ".jar" in jar][0],
                          re.IGNORECASE).group("version")
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+    def __repr__(self):
+        return f"Server {self.server} version {self.get_current_version()} running? {self.is_running()}"
+
     @staticmethod
     def get_max_mem_allocation():
+        """Returns the max available memory of the computer"""
         return int((psutil.virtual_memory().available / math.pow(10, 9)) * 0.5)
+
+    @staticmethod
+    def get_local_ip():
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        return s.getsockname()[0]
+
+    @staticmethod
+    def get_external_ip():
+        return requests.get("https://api.ipify.org").text
+
+    @staticmethod
+    def get_ip():
+        return ServerLoader.get_local_ip(), ServerLoader.get_external_ip()
 
 
 async def main():
-    with ServerMaker(save_location="training") as maker:
-        await maker.make_server(server_name="Test", overwrite=True)
+    with ServerLoader(save_location="training") as loader:
+        await loader.load_server("Test")
+        loader.start_server(mem_allocation=5)
 
 
 if __name__ == "__main__":
