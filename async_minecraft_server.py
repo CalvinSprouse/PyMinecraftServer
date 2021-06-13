@@ -49,6 +49,7 @@ class ServerDoesNotExistException(Exception):
 class VersionException(Exception):
     pass
 
+
 class NoServerLoadedException(Exception):
     pass
 
