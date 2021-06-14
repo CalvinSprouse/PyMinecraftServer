@@ -177,7 +177,7 @@ class ServerLoader:
 
     async def load_properties(self):
         """Load the properties into self.properties dict from server.properties"""
-        if not self.load_server:
+        if not self.server:
             raise NoServerLoadedException()
         properties_contents = await self.get_properties_file_lines()
         self.properties = {line.strip().split("=")[0]: line.strip().split("=")[1] for line in properties_contents
@@ -185,7 +185,7 @@ class ServerLoader:
 
     async def save_server(self):
         """Overwrite the server.properties file to updated properties"""
-        if not self.load_server:
+        if not self.server:
             raise NoServerLoadedException()
         properties_contents = await self.get_properties_file_lines()
         async with aiofiles.open(os.path.join(self.server_location, "server.properties"), "w") as properties_file:
@@ -196,7 +196,7 @@ class ServerLoader:
 
     async def get_properties_file_lines(self) -> []:
         """Returns the file lines of the server.properties file"""
-        if not self.load_server:
+        if not self.server:
             raise NoServerLoadedException()
         async with aiofiles.open(os.path.join(self.server_location, "server.properties"), "r") as properties_file:
             properties_contents = await properties_file.readlines()
@@ -204,7 +204,7 @@ class ServerLoader:
 
     def start_server(self, mem_allocation: int, stdout=None, gui=False):
         """Starts the server as a Popen saved to self.server_process"""
-        if not self.load_server:
+        if not self.server:
             raise NoServerLoadedException()
         if not stdout:
             stdout = subprocess.DEVNULL
@@ -255,9 +255,12 @@ class ServerLoader:
 
     async def set_property(self, property_name: str, property_val: str):
         """Change a property of self.properties"""
+        if not self.server:
+            raise NoServerLoadedException()
         if not self.is_running():
             self.properties[property_name] = property_val
             await self.save_server()
+            # TODO: Fix - Property does not appear to save
             logger.debug(f"Server property {property_name} changed to {property_val}")
 
     def get_property(self, property_name: str):
@@ -266,7 +269,7 @@ class ServerLoader:
 
     def get_current_version(self):
         """Reads the current version from the server jar"""
-        if not self.load_server:
+        if not self.server:
             raise NoServerLoadedException()
         return re.search(r"minecraft_server.(?P<version>(.\d*)*).jar",
                          [jar for jar in os.listdir(self.server_location) if ".jar" in jar][0],
