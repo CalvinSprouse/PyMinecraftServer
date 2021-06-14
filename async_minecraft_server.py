@@ -203,12 +203,10 @@ class ServerLoader:
             properties_contents = await properties_file.readlines()
         return properties_contents
 
-    def start_server(self, mem_allocation: int, stdout=None, gui=False):
+    def start_server(self, mem_allocation: int, gui=False):
         """Starts the server as a Popen saved to self.server_process"""
         if not self.server:
             raise NoServerLoadedException()
-        if not stdout:
-            stdout = subprocess.DEVNULL
         gui_str = "nogui"
         if gui:
             gui_str = ""
@@ -254,14 +252,18 @@ class ServerLoader:
         if not self.is_running():
             self.mem_allocation = min(mem_allocation, self.get_max_mem_allocation())
 
-    async def set_property(self, property_name: str, property_val: str):
+    async def set_property(self, property_name: str, property_val: str, raise_error=False):
         """Change a property of self.properties"""
+        # TODO: Add input validation
         if not self.server:
             raise NoServerLoadedException()
         if not self.is_running():
+            if property_name not in self.properties:
+                logger.warning(f"Key {property_name} does not exist in properties file")
+                if raise_error:
+                    raise KeyError
             self.properties[property_name] = property_val
             await self.save_server()
-            # TODO: Fix - Property does not appear to save
             logger.debug(f"Server property {property_name} changed to {property_val}")
 
     def get_property(self, property_name: str):
@@ -309,13 +311,10 @@ class ServerLoader:
 if __name__ == "__main__":
     import asyncio
 
-
     async def main():
         with ServerLoader("training") as loader:
             await loader.load_server("Test")
-            loader.start_server(2, gui=True)
-            await asyncio.sleep(15)
-            await loader.server_command("help")
-
+            await asyncio.sleep(0)
+            await loader.set_property("server-ip", str(10))
 
     asyncio.run(main())
