@@ -17,7 +17,7 @@ import sys
 import wget
 
 # configure logger
-coloredlogs.install(level="DEBUG")
+coloredlogs.install(level=logging.DEBUG)
 logging.basicConfig(
     format="%(asctime)s %(levelname)s:%(name)s: %(message)s",
     level=logging.DEBUG,
@@ -82,7 +82,7 @@ class ServerMaker:
         :param overwrite: If true will replace a server of the same name, otherwise will throw an error for duplicate names.
         """
         if not self.max_servers or self.max_servers > self.get_number_of_servers() or (
-                server_name in os.listdir(self.server_location) and overwrite):
+                any([server_name.lower() == file.lower() for file in os.listdir(self.server_location)]) and overwrite):
             server_save_location = os.path.join(self.server_location, server_name)
             logger.debug(f"Creating server {server_save_location}, v={server_version}, o={overwrite}")
             if os.path.exists(server_save_location):
@@ -229,7 +229,7 @@ class ServerLoader:
     def stop_server(self):
         """If the server is running, stop it"""
         if self.is_running():
-            self.server_process.close()
+            # TODO: Communicate with actual process to call stop function
             logger.debug(f"Server {self.server} stopped")
 
     def is_running(self):
