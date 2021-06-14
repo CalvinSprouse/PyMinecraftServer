@@ -1,4 +1,4 @@
-from async_minecraft_server import ServerMaker, ServerLoader
+from py_minecraft_server.async_server import ServerMaker, ServerLoader
 import asyncio
 
 

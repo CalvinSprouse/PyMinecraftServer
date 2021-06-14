@@ -1,5 +1,5 @@
-from async_minecraft_server import *
-from async_minecraft_server.naming import get_jar_name
+from py_minecraft_server.async_server import *
+from py_minecraft_server.async_server.naming import get_jar_name
 from bs4 import BeautifulSoup
 import aiohttp
 import logging

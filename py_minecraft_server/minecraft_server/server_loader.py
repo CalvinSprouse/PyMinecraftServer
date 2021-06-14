@@ -1,46 +1,12 @@
-"""
-Next step: make custom exceptions
-"""
-from bs4 import BeautifulSoup
-from multiprocessing import Process, freeze_support
+from py_minecraft_server.minecraft_server.server_maker import ServerMaker
+from py_minecraft_server.minecraft_server.context_manager import cd
+from multiprocessing import Process
 import math
 import os
 import psutil
 import re
 import requests
-import shutil
 import socket
-import subprocess
-import time
-import wget
-
-
-class cd:
-    def __init__(self, new_path):
-        self.new_path = os.path.expanduser(new_path)
-
-    def __enter__(self):
-        self.saved_path = os.getcwd()
-        os.chdir(self.new_path)
-
-    def __exit__(self, etype, value, traceback):
-        os.chdir(self.saved_path)
-
-
-class VersionException(Exception):
-    def __init__(self, entered_version=None):
-        self.entered_version = entered_version
-
-    def get_user_input(self):
-        return self.entered_version
-
-
-class ServerAlreadyExistsException(Exception):
-    def __init__(self, attempted_location=None):
-        self.attempted_location = attempted_location
-
-    def get_attempted_location(self):
-        return self.attempted_location
 
 
 class ServerLoader:
@@ -104,7 +70,8 @@ class ServerLoader:
 
     def run_server(self):
         with cd(self.server_location):
-            os.system(f"java -Xms{int(self.mem_allocation)}G -Xmx{int(self.mem_allocation)}G -jar minecraft_server.{self.get_current_version()}.jar")
+            os.system(
+                f"java -Xms{int(self.mem_allocation)}G -Xmx{int(self.mem_allocation)}G -jar minecraft_server.{self.get_current_version()}.jar")
         self.stop_server()
 
     def stop_server(self):
@@ -200,76 +167,3 @@ class ServerLoader:
     @staticmethod
     def get_max_mem_allocation():
         return int((psutil.virtual_memory().available / math.pow(10, 9)) * 0.75)
-
-
-class ServerMaker:
-    def __init__(self, server_location: str, jar_version=None, overwrite=False):
-        # define location and create it if it doesn't exist
-        self.server_location = os.path.abspath(server_location)
-        if overwrite and os.path.exists(self.server_location):
-            shutil.rmtree(self.server_location)
-        if not os.path.exists(server_location):
-            os.makedirs(self.server_location, exist_ok=True)
-            self.jar_version = jar_version
-            if not jar_version:
-                self.jar_version = self.get_current_minecraft_version()
-            self.jar_name = f"minecraft_server.{self.jar_version}.jar"
-        else:
-            raise ServerAlreadyExistsException(server_location)
-
-    def make_server(self):
-        self.download_jar(self.server_location, self.jar_name, self.jar_version)
-        with cd(self.server_location):
-            subprocess.run(f"java -Xms1G -Xmx1G -jar {self.jar_name}")
-            eula_lines = open("eula.txt", "r").readlines()[:2] + ["eula=true\n"]
-            open("eula.txt", "w").writelines(eula_lines)
-        return self
-
-    def get_number_of_servers(self):
-        """
-        :return: The number of servers adjacent to the current server
-        """
-        return os.listdir(os.path.basename(self.server_location))
-
-    def get_server_location(self):
-        return self.server_location
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        pass
-
-    @staticmethod
-    def download_jar(jar_save_location: str, jar_save_name: str, jar_version: str):
-        """
-        Goes to the depth of the web to expose my computer to virus'.
-        """
-        try:
-            download_link = [link for link in
-                             BeautifulSoup(requests.get(f"https://mcversions.net/download/{jar_version}").content,
-                                           "html.parser").find_all("a", href=True)
-                             if "server" in link["href"] and "mojang" in link["href"]][0]
-            wget.download(download_link["href"], os.path.join(jar_save_location, jar_save_name))
-        except IndexError:
-            raise VersionException(jar_version)
-
-    @staticmethod
-    def get_current_minecraft_version():
-        return re.search(r"minecraft_server.(?P<version>(.\d*)*).jar",
-                         BeautifulSoup(requests.get(r"https://www.minecraft.net/en-us/download/server").content,
-                                       "html.parser").find("div", {"class": "minecraft-version"}).
-                         find("a").text, re.IGNORECASE).group("version")
-
-
-if __name__ == "__main__":
-    # needed for windows
-    freeze_support()
-
-    ServerMaker("training", overwrite=True).make_server()
-    with ServerLoader("training", 10) as loader:
-        loader.start_server()
-        while loader.is_running():
-            print("AGONY")
-            time.sleep(1)
-        print("RELEASE")
