@@ -1,8 +1,6 @@
 from bs4 import BeautifulSoup
-from multiprocessing import Process
 import aiohttp
 import aiofiles
-import asyncio
 import coloredlogs
 import logging
 import math
@@ -205,38 +203,32 @@ class ServerLoader:
         return properties_contents
 
     def start_server(self, mem_allocation: int, stdout=None):
-        """Starts the server as a separate process saved to self.server_process"""
+        """Starts the server as a Popen saved to self.server_process"""
         if not self.load_server:
             raise NoServerLoadedException()
-        logger.debug(f"Attempting to start server {self.server} with RAM {mem_allocation}")
-        self.set_mem_allocation(mem_allocation)
-        self.server_process = Process(target=self.run_server, args=(mem_allocation, stdout))
-        self.server_process.start()
-        logger.debug(f"Server {self.server} started with RAM {mem_allocation} on {self.get_ip()}")
-
-    def run_server(self, mem_allocation: int, stdout=None):
-        """Runs the server, could be called instead of start server to run the server in a blocking style"""
-        if not self.load_server:
-            raise NoServerLoadedException()
-        self.set_mem_allocation(mem_allocation)
         if not stdout:
             stdout = subprocess.DEVNULL
-        subprocess.run(
+        self.set_mem_allocation(mem_allocation)
+
+        logger.debug(f"Attempting to start server {self.server} with RAM {mem_allocation}")
+        self.server_process = subprocess.Popen(
             f"java -Xms{self.mem_allocation}G -Xmx{self.mem_allocation}G -jar {get_jar_name(self.get_current_version())}",
-            cwd=self.server_location, stdout=stdout)
-        logger.debug(f"Server {self.server} running {self.is_running()} on {self.get_ip()}")
+            cwd=self.server_location, stdout=stdout, stdin=subprocess.PIPE)
+        logger.debug(f"Server {self.server} started with {mem_allocation}GB on {self.get_ip()}")
 
     def stop_server(self):
         """If the server is running, stop it"""
         if self.is_running():
-            # TODO: Communicate with actual process to call stop function
+            try:
+                self.get_process().communicate(input=b"stop", timeout=30)
+            except subprocess.TimeoutExpired:
+                logger.warning(f"Server {self.server} failed to respond to stop command, killing")
+                self.get_process().kill()
             logger.debug(f"Server {self.server} stopped")
 
     def is_running(self):
         """Check if the self.server_process Process is alive"""
-        if self.server_process:
-            return self.server_process.is_alive()
-        return False
+        return self.server_process is not None
 
     def get_process(self):
         """Returns a reference to self.server_process"""
@@ -293,13 +285,3 @@ class ServerLoader:
     @staticmethod
     def get_ip():
         return ServerLoader.get_local_ip(), ServerLoader.get_external_ip()
-
-
-async def main():
-    with ServerLoader(save_location="training") as loader:
-        await loader.load_server("Test")
-        loader.start_server(mem_allocation=5)
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
