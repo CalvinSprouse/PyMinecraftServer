@@ -5,15 +5,16 @@ import re
 
 
 def scrape_property_config(is_java_edition: bool = True):
+    """Retrieve property's, their types defaults and descriptions from the minecraft wiki"""
     def get_value_config(type_str: str, default_str: str) -> dict:
         """Retrieves the value configuration only works on java"""
-        logger.debug(f"Retrieving value from {type_str.strip()} {default_str.strip()}")
         type_str = type_str.lower().strip()
         default_str = default_str.strip()
         if type_str in ["boolean", "bool"]:
-            return {"type": bool, "default": default_str in ["true"], "validator": None}
+            return {"type": bool, "default": default_str in ["true"],
+                    "validator": lambda boolean: isinstance(boolean, bool)}
         elif type_str in ["string", "str"]:
-            return {"type": str, "default": default_str, "validator": None}
+            return {"type": str, "default": default_str, "validator": lambda string: isinstance(string, str)}
         elif type_str.split()[0] == "integer":
             int_search = re.search(
                 r"\((?P<min>\d+)\W((?P<simple_max>\d+)|\((?P<base>\d+)\^(?P<exponent>\d+)\s*-\s*(?P<subtract>\d+))",
@@ -26,9 +27,11 @@ def scrape_property_config(is_java_edition: bool = True):
                 int_subtract = int_search.group("subtract")
                 if int_exponent:
                     return {"type": int, "default": int(default_str),
-                            "validator": lambda num: num >= int(int_min) or num <= int(
+                            "validator": lambda num: int(int_min) <= num <= int(
                                 math.pow(int(int_base), int(int_exponent)) - int(int_subtract))}
-            return {"type": int, "default": int(default_str), "validator": None}
+                return {"type": int, "default": int(default_str),
+                        "validator": lambda num: int(int_min) <= num <= int(int_simple_max)}
+            return {"type": int, "default": int(default_str), "validator": lambda num: isinstance(num, int)}
         elif type_str == "[more information needed]":
             return {"type": str, "default": None, "validator": None}
         raise ValueError(f"{type_str} not found to be of any type")
@@ -43,10 +46,7 @@ def scrape_property_config(is_java_edition: bool = True):
             prop_soup = prop.find_all("td")
             prop_id = prop.get("id", default=prop_soup[0].get_text()).strip()
 
-            prop_table[prop_id] = get_value_config(prop_soup[1].get_text(), prop_soup[2].get_text()).update(
-                {"description": prop_soup[3].get_text().strip()})
-        print(prop_table)
-
-
-if __name__ == "__main__":
-    scrape_property_config()
+            prop_table[prop_id] = {**get_value_config(prop_soup[1].get_text(), prop_soup[2].get_text()),
+                                   **{"description": prop_soup[3].get_text().strip()}}
+        logger.debug(f"Retrieved property table from minecraft wiki {prop_table}")
+        return prop_table

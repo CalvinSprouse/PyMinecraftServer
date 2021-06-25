@@ -1,4 +1,5 @@
 from py_minecraft_server import logger
+import py_minecraft_server.configuration
 import os
 
 
@@ -16,6 +17,9 @@ class PropertiesManager:
             raise ValueError(f"{self.properties_file_location} does not point to a file")
         if not os.path.basename(self.properties_file_location) == "server.properties":
             raise ValueError(f"{self.properties_file_location} does not appear to point to a server.properties file")
+
+        # saves a dict of the properties retrieved from the internet
+        self.default_property_config = py_minecraft_server.configuration.scrape_property_config()
 
     def get_properties(self) -> dict:
         """Returns a dict of the properties in the server.properties file"""
