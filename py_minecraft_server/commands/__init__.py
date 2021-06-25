@@ -1,1 +1,1 @@
-from server_connection import ServerRCON, ServerQuery
+from .server_connection import ServerRCON, ServerQuery

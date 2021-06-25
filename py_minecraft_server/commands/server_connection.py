@@ -1,4 +1,4 @@
-from py_minecraft_server.logging import logger
+from py_minecraft_server import logger
 from mctools import RCONClient, QUERYClient
 
 

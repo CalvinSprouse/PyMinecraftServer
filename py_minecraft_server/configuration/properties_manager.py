@@ -1,4 +1,4 @@
-from py_minecraft_server.logging import logger
+from py_minecraft_server import logger
 import os
 
 
@@ -24,7 +24,7 @@ class PropertiesManager:
 
     def set_properties(self, add_properties: bool = False, ignore_errors: bool = False, **new_properties):
         """
-        Accepts keyword input of properties to change ("-" and "." key changed to "_" due to python)
+        Accepts keyword input of properties to change can be done as kwargs or as a **{dict}
         :param add_properties: If true will allow keywords that arent already in the server.properties file to be set
         :param ignore_errors: If true will ignore any keys that arent in the server.properties file BUT will not
             write them to the server.properties file unless add_properties is True"""
@@ -37,10 +37,8 @@ class PropertiesManager:
 
         for prop_key, prop_val in new_properties.items():
             # TODO: Check to ensure this method of value replacing works
-            prop_key = prop_key.replace("_", "-")
-            if prop_key not in properties:
-                prop_key = prop_key.replace("-", ".")
-                if not add_properties and prop_key not in properties:
+            if self.__dict_to_property_tag(prop_key) not in properties:
+                if not add_properties:
                     if not ignore_errors:
                         raise ValueError(f"Property {prop_key} not in server.properties")
                     logger.warning(f"Ignoring value {prop_key} as it does not appear in server.properties")
@@ -62,3 +60,13 @@ class PropertiesManager:
         open(self.properties_file_location, "w").writelines(backup_lines)
         logger.debug(f"Reverted to backup properties file from {self.backup_location}")
         os.remove(self.backup_location)
+
+    def __dict_to_property_tag(self, dict_key: str) -> tuple[str, str]:
+        """Converts the dict key of word_word to a property key of word-word or word.word"""
+        return dict_key.replace("_", "-"), dict_key.replace("_", ".")
+
+    def __property_tag_to_dict_key(self, property_tag: str) -> str:
+        """Convert the property tag of word.word or word-word to a dict key of word_word"""
+        if "." in property_tag:
+            return property_tag.replace(".", "_")
+        return property_tag.replace("-", "_")

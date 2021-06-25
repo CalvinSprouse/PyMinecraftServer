@@ -1,6 +1,6 @@
 # TODO: Fix imports
 from py_minecraft_server.utils import validate_version, soupify_url, get_vanilla_url, get_forge_url
-from py_minecraft_server.logging import logger
+from py_minecraft_server import logger
 import asyncio
 import threading
 import time

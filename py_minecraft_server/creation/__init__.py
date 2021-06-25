@@ -1,1 +1,1 @@
-from download import download_jar, copy_file, thread_download
+from .download import download_jar, copy_file, thread_download

@@ -1,1 +1,1 @@
-from properties_manager import PropertiesManager
+from .properties_manager import PropertiesManager
