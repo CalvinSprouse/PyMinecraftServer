@@ -23,6 +23,7 @@ class PropertiesManager:
 
     def get_properties(self) -> dict:
         """Returns a dict of the properties in the server.properties file"""
+        # TODO: Handle blank lines
         return {line.split("=")[0]: line.split("=")[1].strip() for line in
                 open(self.properties_file_location).readlines() if "=" in line}
 
