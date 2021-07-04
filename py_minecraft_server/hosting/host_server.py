@@ -35,7 +35,7 @@ class ServerHost:
         with open(os.path.join(self.server_location, "start.bat"), "w") as writer:
             writer.write(f"{self.server_command}\npause")
 
-    async def start_server(self, stdout:bool = False):
+    async def start_server(self, stdout: bool = False):
         self.write_start_batch()
         if not stdout:
             stdout = subprocess.DEVNULL

@@ -43,6 +43,7 @@ async def download_jar(version: str, save_location: str, is_forge: bool, create_
     logger.debug(f"Async download started from {download_url} to {save_location}")
     await thread_download(download_url, save_location)
     if copy_locations:
+        logger.debug(f"Copying downloaded jar file to a server")
         for location in copy_locations:
             copy_file(save_location, location)
 
