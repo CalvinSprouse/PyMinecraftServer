@@ -4,13 +4,14 @@ import os
 
 
 class PropertiesManager:
-    def __init__(self, properties_file_location: str, backup_filename: str = "backup.properties"):
+    def __init__(self, server_location: str, backup_filename: str = "backup.properties"):
         """
         A manager of the server.properties file
-        :param properties_file_location: The location of the server.properties file
+        :param server_location: The location of the server dir
         :param backup_filename: The name of the backup file, defaults to backup.properties
         """
-        self.properties_file_location = properties_file_location
+        self.server_location = server_location
+        self.properties_file_location = os.path.join(server_location, "server.properties")
         self.backup_filename = backup_filename
         self.backup_location = os.path.join(os.path.dirname(self.properties_file_location), self.backup_filename)
         if not os.path.isfile(self.properties_file_location):
@@ -23,7 +24,6 @@ class PropertiesManager:
 
     def get_properties(self) -> dict:
         """Returns a dict of the properties in the server.properties file"""
-        # TODO: Handle blank lines
         return {line.split("=")[0]: line.split("=")[1].strip() for line in
                 open(self.properties_file_location).readlines() if "=" in line}
 

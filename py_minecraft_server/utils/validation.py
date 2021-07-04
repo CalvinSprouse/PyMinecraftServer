@@ -1,4 +1,3 @@
-# TODO: Fix imports
 from py_minecraft_server import logger
 import py_minecraft_server.utils
 import re
@@ -20,5 +19,4 @@ def validate_version(version: str, is_forge: bool = False) -> str:
                     "div", {"class": "error-template"})) == 0:
                 logger.debug(f"Validated vanilla version {version}")
                 return version
-    # TODO: Replace None with an exception raise
     raise ValueError(f"Version does not exist {version} is_forge={is_forge}")

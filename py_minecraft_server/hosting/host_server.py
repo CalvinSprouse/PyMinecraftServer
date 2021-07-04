@@ -3,11 +3,10 @@ import string
 from py_minecraft_server import logger
 from py_minecraft_server.commands import ServerRCON, ServerQuery
 from py_minecraft_server.configuration import PropertiesManager
+from py_minecraft_server.utils import get_external_ip, get_local_ip
 import asyncio
 import os
 import random
-import requests
-import socket
 import subprocess
 
 
@@ -26,7 +25,6 @@ class ServerHost:
         logger.info(f"Instantiated ServerHost @{server_location} ram{ram_allocation}GB java={java_ref}")
 
     def write_start_batch(self, gui: bool = False):
-        # TODO: Move start batch to properties manager as it makes more sense over there
         gui_str = "nogui"
         if gui_str:
             gui_str = ""
@@ -37,29 +35,34 @@ class ServerHost:
         with open(os.path.join(self.server_location, "start.bat"), "w") as writer:
             writer.write(f"{self.server_command}\npause")
 
-    async def start_server(self, stdout=subprocess.DEVNULL):
-        # TODO: Add stdout configuration to prevent logging overkill
+    async def start_server(self, stdout:bool = False):
         self.write_start_batch()
+        if not stdout:
+            stdout = subprocess.DEVNULL
+        else:
+            stdout = None
+
         properties = PropertiesManager(os.path.join(self.server_location, "server.properties"))
-        if not properties.get_properties()["enable-rcon"].strip() in ["true"]:
+        if properties.get_properties()["enable-rcon"].strip() in ["false"]:
             properties.set_properties(**{"enable-rcon": "true"})
-        if not properties.get_properties()["enable-query"].strip() in ["true"]:
+        if properties.get_properties()["enable-query"].strip() in ["false"]:
             properties.set_properties(**{"enable-query": "true"})
         if properties.get_properties()["rcon.password"].strip() == "":
             properties.set_properties(
                 **{"rcon.password": "".join(random.choice(string.ascii_letters) for _ in range(10))})
         properties = properties.get_properties()
+
         logger.debug(f'rcon={properties["enable-rcon"]} query={properties["enable-query"]} '
                      f'rcon pass={properties["rcon.password"]} rcon port={properties["rcon.port"]}')
         logger.info(f"Starting server {os.path.basename(self.server_location)} on separate process")
+
         self.server_process = subprocess.Popen(self.server_command, cwd=self.server_location, shell=True,
                                                stdout=stdout)
         # TODO: Find less arbitrary way to ensure server is hosted
         await asyncio.sleep(10)
         self.server_rcon = ServerRCON(host="localhost", password=properties["rcon.password"].strip())
         self.server_query = ServerQuery(host="localhost")
-        # TODO: Output IP
-        logger.info(f"Server hosted on local:{self.get_local_ip()} external:{self.get_external_ip()}")
+        logger.info(f"Server hosted on local:{get_local_ip()} external:{get_external_ip()}")
         return self.server_process
 
     async def stop_server(self):
@@ -72,9 +75,11 @@ class ServerHost:
         self.server_query = None
         logger.info(f"Server stopped @{os.path.basename(self.server_location)}")
 
-    async def send_command(self, command):
-        # TODO: Write command sender and await returns to prevent locking up
-        pass
+    def get_rcon(self):
+        return self.server_rcon
+
+    def get_query(self):
+        return self.server_query
 
     def is_server_alive(self):
         return self.server_process.poll is None
@@ -84,12 +89,3 @@ class ServerHost:
 
     def get_server_query(self):
         return self.server_query
-
-    @staticmethod
-    def get_external_ip():
-        return requests.get("https://api.ipify.org").text
-
-    @staticmethod
-    def get_local_ip():
-        return socket.gethostbyname(socket.gethostname())
-# TODO: Consider moving ip to utils.web so it can be accessed elsewhere

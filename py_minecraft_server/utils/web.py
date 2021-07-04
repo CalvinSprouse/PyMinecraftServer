@@ -1,5 +1,6 @@
 from bs4 import BeautifulSoup
 import requests
+import socket
 
 
 def soupify_url(url: str, headers: dict = None, ignore_errors: bool = False):
@@ -25,3 +26,16 @@ def get_forge_url(version: str) -> str:
 def get_vanilla_url(version: str) -> str:
     """Ensures a constant and streamlined string creation for vanilla urls"""
     return f"https://mcversions.net/download/{version}"
+
+
+def get_external_ip():
+    """Retrieves the external IP via a website"""
+    request = requests.get("https://api.ipify.org")
+    if request.status_code == 200:
+        return requests.get("https://api.ipify.org").text
+    return None
+
+
+def get_local_ip():
+    """Retrieves the local IP via the socket package"""
+    return socket.gethostbyname(socket.gethostname())

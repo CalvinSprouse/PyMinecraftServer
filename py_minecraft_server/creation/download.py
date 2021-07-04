@@ -1,4 +1,3 @@
-# TODO: Fix imports
 from py_minecraft_server.utils import validate_version, soupify_url, get_vanilla_url, get_forge_url
 from py_minecraft_server import logger
 import asyncio
@@ -9,7 +8,6 @@ import os
 import shutil
 
 
-# TODO: Consider converting to hostingfiles.lol
 async def download_jar(version: str, save_location: str, is_forge: bool, create_dirs: bool = False,
                        overwrite: bool = False, *copy_locations):
     """
