@@ -66,11 +66,13 @@ class PropertiesManager:
         logger.debug(f"Reverted to backup properties file from {self.backup_location}")
         os.remove(self.backup_location)
 
-    def __dict_to_property_tag(self, dict_key: str) -> tuple[str, str]:
+    @staticmethod
+    def __dict_to_property_tag(dict_key: str) -> tuple[str, str]:
         """Converts the dict key of word_word to a property key of word-word or word.word"""
         return dict_key.replace("_", "-"), dict_key.replace("_", ".")
 
-    def __property_tag_to_dict_key(self, property_tag: str) -> str:
+    @staticmethod
+    def __property_tag_to_dict_key(property_tag: str) -> str:
         """Convert the property tag of word.word or word-word to a dict key of word_word"""
         if "." in property_tag:
             return property_tag.replace(".", "_")
