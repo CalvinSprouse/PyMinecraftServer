@@ -5,7 +5,6 @@ import asyncio
 import os
 
 
-# TODO: Put java ref finder in utils
 async def create_server(server_location: str, server_version: str, jar_save_location: str = None,
                         is_forge: bool = False, java_ref: str = "java"):
     server_version = validate_version(server_version, is_forge)
@@ -18,6 +17,6 @@ async def create_server(server_location: str, server_version: str, jar_save_loca
                                                         False, False, "java", *[server_location])
     else:
         await py_minecraft_server.creation.download_jar(server_version, server_location, is_forge)
+
     # Call the server and preform inits
-    # TODO: Move batch creator to creation
 

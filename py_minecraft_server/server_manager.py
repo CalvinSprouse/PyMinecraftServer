@@ -1,9 +1,8 @@
-import os
+from py_minecraft_server import logger
+import argparse
 
-
-class ServerManager:
-    def __init__(self, server_save_location: str):
-        self.server_save_location = server_save_location
-        os.makedirs(self.server_save_location, exist_ok=True)
-
-    create_server = ""
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Manage Minecraft Servers")
+    parser.add_argument("-c", "--create", type=str, help="Name of server to create")
+    args = vars(parser.parse_args())
+    print(args)
